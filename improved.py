@@ -1,38 +1,38 @@
 from keras.applications import VGG16
-from keras import models
-from keras import layers,Input
+from keras import Input
 from keras.models import Model
 from keras import optimizers
+from keras.applications.imagenet_utils import preprocess_input
+from keras.layers import Dense, Flatten
+from keras.utils import np_utils
+from keras import backend as backend
 import scipy.io
 import numpy as np
 import cv2
-from keras.applications.imagenet_utils import preprocess_input
-from keras.layers import Dense, Activation, Flatten
-from keras.utils import np_utils
 from hyperas import optim
 from hyperopt import Trials, STATUS_OK, tpe
-from hyperas.distributions import choice, uniform
+from hyperas.distributions import choice
 import tensorflow as tf
-from keras import backend as K
 import multiprocessing
-import time
 
 
-num_cores = multiprocessing.cpu_count()
-GPU = True
+def configure(num_cores=None,gpu=False):
 
-if GPU:
-    num_GPU = 1
-    num_CPU = 1
-else:
-    num_CPU = 1
-    num_GPU = 0
+    if ~num_cores:
+        num_cores = multiprocessing.cpu_count()
 
-config = tf.ConfigProto(intra_op_parallelism_threads=num_cores,\
-        inter_op_parallelism_threads=num_cores, allow_soft_placement=True,\
-        device_count = {'CPU' : num_CPU, 'GPU' : num_GPU})
-session = tf.Session(config=config)
-K.set_session(session)
+    if gpu:
+        num_gpu= 1
+        num_cpu = 1
+    else:
+        num_cpu = 1
+        num_gpu = 0
+
+    config = tf.ConfigProto(intra_op_parallelism_threads=num_cores, \
+                            inter_op_parallelism_threads=num_cores, allow_soft_placement=True, \
+                            device_count = {'CPU' : num_cpu, 'GPU' : num_gpu})
+    session = tf.Session(config=config)
+    backend.set_session(session)
 
 
 def resizeImages(images, resize_factor):

@@ -22,6 +22,8 @@ import pickle
 from datetime import datetime
 import os
 import random
+from numba import cuda
+
 
 """
 Task 2 - task transfer 
@@ -47,16 +49,14 @@ def set_params():
     parameters["first_n_split"] = 300
     parameters["seed"] = 0
     parameters["size"] = 224
-
-    parameters["hyper_parameters"]["learning_rate"] = [10 ** i for i in range(-8, -3)]
-    # parameters["hyper_parameters"]["batch_size"] = [2 ** i for i in range(3, 7)]
-    parameters["hyper_parameters"]["batch_size"] = [4]
-    parameters["hyper_parameters"]["epochs"] = [5]
+    parameters["hyper_parameters"]["learning_rate"] = [10 ** -i for i in range(3, 5)]
+    parameters["hyper_parameters"]["batch_size"] = [32]
+    parameters["hyper_parameters"]["epochs"] = [10]
     parameters["hyper_parameters"]["level"] = {"basic": {}, "imprvoed": {}}
     parameters["hyper_parameters"]["basic"] = {"dropouts": [0], "l1": [0], "l2": [0]}
-    parameters["hyper_parameters"]["improved"] = {"dropouts": [x / 10 for x in range(4, 10)],
-                                                  "l1": [i / 10 for i in range(2, 8)],
-                                                  "l2": [i / 10 for i in range(2, 8)]}
+    parameters["hyper_parameters"]["improved"] = {"dropouts": [x / 10 for x in range(2, 6)],
+                                                  "l1": [10 ** -i for i in range(-1, 2)],
+                                                  "l2": [10 ** -i for i in range(-1, 2)]}
 
     return parameters
 
@@ -142,12 +142,11 @@ def configure_model(dropout, l1, l2, size):
     image_input = Input(shape=(size, size, 3))
     model = VGG16(weights='imagenet', include_top=True, input_tensor=image_input)
     last_layer = model.get_layer('block5_pool').output
-    x = MaxPooling2D(pool_size=2, strides=3, name="max_pooling")(last_layer)
-    x = Flatten(name='flatten')(x)
+    x = Flatten(name='flatten')(last_layer)
     x = Dropout(dropout)(x)
-    x = Dense(4096, activation='relu', name='fc1')(x)
+    x = Dense(512, activation='relu', name='fc1')(x)
     x = Dropout(dropout)(x)
-    x = Dense(4096, activation='relu', name='fc2')(x)
+    x = Dense(512, activation='relu', name='fc2')(x)
     x = Dropout(dropout)(x)
     out = Dense(params["num_classes"], activation='sigmoid', name='output',
                 kernel_regularizer=regularizers.l1_l2(l1=l1, l2=l2))(x)
@@ -248,6 +247,12 @@ def train_grid_search(X_train, y_train, params, level):
                                 pickle.dump(iterations_results, open("results/backup_{}.p".format(level), 'wb'))
                                 iteration += 1
 
+                                # backend.clear_session()
+                                # del results_model
+                                # configure(gpu_ind=True)
+                                # cuda.select_device(0)
+                                # cuda.close()
+
     columns = ["iteration", "batch_size", "optimizer", "learning_rate", "dropout", "l1", "l2", "epochs", "train_loss",
                "train_accuracy", "validation_loss", "validation_acc"]
     df = pd.DataFrame(iterations_results, columns=columns)
@@ -315,8 +320,7 @@ def precision_recall_curve_calc(y, y_predict_proba, level, accuracy):
                    if 'step' in signature(plt.fill_between).parameters
                    else {})
     plt.figure()
-    plt.step(recall, precision, color='b', alpha=0.2,
-             where='post')
+    plt.step(recall, precision, color='b', alpha=0.2, where='post')
     plt.fill_between(recall, precision, alpha=0.2, color='b', **step_kwargs)
     plt.xlabel('Recall')
     plt.ylabel('Precision')
@@ -338,9 +342,10 @@ def report(best_model, X, y, batch_size, level, index_test):
     :param index_test: the index that from him the test set starts
     :return: None
     """
-    y_predict_proba = best_model.model.predict(X, batch_size=batch_size, verbose=1).reshape(-1)
+    y_predict_proba = best_model.model.predict(X, batch_size=batch_size, verbose=1)
     y_pred = [1 if y > 0.5 else 0 for y in y_predict_proba]
     loss = log_loss(y, y_predict_proba)
+    y_predict_proba = y_predict_proba.reshape(-1)
     accuracy = accuracy_score(y, y_pred)
     print("test loss={:.4f}, test accuracy: {:.4f}% of the {} CNN".format(loss, accuracy * 100, level))
     results = pd.DataFrame({"true": y, "predicted": y_predict_proba})
@@ -368,10 +373,9 @@ def get_best_model(X_train, y_train):
 
 if __name__ == '__main__':
 
-    gpu = True
     start_all_over = True
-    levels = ["basic", "improved"]
-    configure(gpu_ind=gpu)
+    levels = ["improved"]
+    configure(gpu_ind=False)
     params = set_params()
     start_time = time.time()
     resized_images, Y = prepare_data(params)

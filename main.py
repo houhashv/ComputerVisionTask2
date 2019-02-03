@@ -23,6 +23,7 @@ from datetime import datetime
 import os
 import random
 from numba import cuda
+import json
 
 
 """
@@ -49,15 +50,14 @@ def set_params():
     parameters["first_n_split"] = 300
     parameters["seed"] = 0
     parameters["size"] = 224
-    parameters["hyper_parameters"]["learning_rate"] = [10 ** -i for i in range(3, 5)]
+    parameters["hyper_parameters"]["learning_rate"] = [10 ** -i for i in range(1, 4)]
     parameters["hyper_parameters"]["batch_size"] = [32]
     parameters["hyper_parameters"]["epochs"] = [10]
     parameters["hyper_parameters"]["level"] = {"basic": {}, "imprvoed": {}}
     parameters["hyper_parameters"]["basic"] = {"dropouts": [0], "l1": [0], "l2": [0]}
-    parameters["hyper_parameters"]["improved"] = {"dropouts": [x / 10 for x in range(2, 6)],
-                                                  "l1": [10 ** -i for i in range(-1, 2)],
-                                                  "l2": [10 ** -i for i in range(-1, 2)]}
-
+    parameters["hyper_parameters"]["improved"] = {"dropouts": [x / 10 for x in range(2, 8)],
+                                                  "l1": [10 ** -i for i in range(0, 3)],
+                                                  "l2": [10 ** -i for i in range(0, 3)]}
     return parameters
 
 
@@ -344,8 +344,8 @@ def report(best_model, X, y, batch_size, level, index_test):
     """
     y_predict_proba = best_model.model.predict(X, batch_size=batch_size, verbose=1)
     y_pred = [1 if y > 0.5 else 0 for y in y_predict_proba]
-    loss = log_loss(y, y_predict_proba)
     y_predict_proba = y_predict_proba.reshape(-1)
+    loss = log_loss(y, y_predict_proba)
     accuracy = accuracy_score(y, y_pred)
     print("test loss={:.4f}, test accuracy: {:.4f}% of the {} CNN".format(loss, accuracy * 100, level))
     results = pd.DataFrame({"true": y, "predicted": y_predict_proba})
@@ -362,19 +362,22 @@ def get_best_model(X_train, y_train):
     :param y_train: true labels
     :return: keras history object with the trained model, the batch sized used for training
     """
-    df = pickle.load(open("results/final_df_train_improved.p", "rb"))
-    best_params = df[df["validation_acc"] == df["validation_acc"].max()].to_dict()
+    df = pd.DataFrame(json.load(open("results/bests.json", "rb"))["best"])
+    best_params = df[df["validation_acc"] == df["validation_acc"].max()].reset_index().to_dict()
+    # results_model = train_model(X_train, y_train, best_params["optimizer"][0], best_params["batch_size"][0],
+    #                             best_params["learning_rate"][0], best_params["epochs"][0], best_params["dropout"][0],
+    #                             best_params["l1"][0], best_params["l2"][0], "improved", "test")
     results_model = train_model(X_train, y_train, best_params["optimizer"][0], best_params["batch_size"][0],
-                                best_params["learning_rate"][0], best_params["epochs"][0], best_params["dropout"][0],
-                                best_params["l1"][0], best_params["l2"][0], "improved", "test")
+                                0.001, best_params["epochs"][0],0,
+                                0, 0, "improved", "test")
 
     return results_model, best_params["batch_size"][0]
 
 
 if __name__ == '__main__':
 
-    start_all_over = True
-    levels = ["improved"]
+    start_all_over = False
+    levels = ["basic", "improved"]
     configure(gpu_ind=False)
     params = set_params()
     start_time = time.time()

@@ -364,12 +364,9 @@ def get_best_model(X_train, y_train):
     """
     df = pd.DataFrame(json.load(open("results/bests.json", "rb"))["best"])
     best_params = df[df["validation_acc"] == df["validation_acc"].max()].reset_index().to_dict()
-    # results_model = train_model(X_train, y_train, best_params["optimizer"][0], best_params["batch_size"][0],
-    #                             best_params["learning_rate"][0], best_params["epochs"][0], best_params["dropout"][0],
-    #                             best_params["l1"][0], best_params["l2"][0], "improved", "test")
     results_model = train_model(X_train, y_train, best_params["optimizer"][0], best_params["batch_size"][0],
-                                0.001, best_params["epochs"][0],0,
-                                0, 0, "improved", "test")
+                                best_params["learning_rate"][0], best_params["epochs"][0], best_params["dropout"][0],
+                                best_params["l1"][0], best_params["l2"][0], "improved", "test")
 
     return results_model, best_params["batch_size"][0]
 
